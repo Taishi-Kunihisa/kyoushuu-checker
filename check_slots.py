@@ -163,12 +163,13 @@ def scrape():
             if i == WEEKS - 1:
                 break
             old = frame.locator("#ddlWeeks").input_value()
-            frame.locator("#btnNextWeek").click()
+            # 次週ボタンは非表示扱いなので JS でクリックする
+            frame.locator("#btnNextWeek").evaluate("el => el.click()")
             wait_week_change(frame, old)
 
         # 放置セッションが残らないようにログアウト
         try:
-            frame.locator("#btnLogOut").click(timeout=5000)
+            frame.locator("#btnLogOut").evaluate("el => el.click()", timeout=5000)
             time.sleep(1)
         except Exception:
             pass
