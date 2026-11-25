@@ -196,7 +196,8 @@ def main():
     try:
         target, slots = scrape()
     except Exception as e:
-        print(f"エラー: {e}", file=sys.stderr)
+        # 詳細はログに出さず通知でだけ送る（画面の文言に個人情報が含まれることがあるため）
+        print(f"エラー: {type(e).__name__}", file=sys.stderr)
         # 連続エラーで通知が鳴り続けないよう、エラー状態に入ったときだけ通知
         if not state.get("error"):
             try:
@@ -214,9 +215,8 @@ def main():
     prev = set(state.get("slots", []))
     new = [s for s in hits if slot_key(s) not in prev]
 
-    print(f"[{now:%Y-%m-%d %H:%M}] 予約対象: {target} / 条件に合う空き {len(hits)} 件 / 新規 {len(new)} 件")
-    for s in hits:
-        print("  " + fmt(s) + ("  ← NEW" if s in new else ""))
+    # リポジトリが Public なのでログには件数だけ出す（日時や予約対象は通知でのみ送る）
+    print(f"[{now:%Y-%m-%d %H:%M}] 空き {len(hits)} 件 / 新規 {len(new)} 件")
 
     if new:
         lines = [fmt(s) for s in sorted(new, key=slot_key)]
