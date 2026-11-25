@@ -53,6 +53,7 @@ jobs:
           INTERVAL_MINUTES: "10"
           ACTIVE_FROM: "6"
           ACTIVE_TO: "24"
+          PYTHONUNBUFFERED: "1"
         run: python check_slots.py
 
       - name: 結果を保存
