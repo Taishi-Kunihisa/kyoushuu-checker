@@ -8,7 +8,8 @@
   NTFY_TOPIC     ntfy のトピック名（推測されにくい文字列にする）
 
 任意の環境変数（GitHub Variables か workflow の env で設定）:
-  WEEKS          何週先まで見るか（デフォルト 3）
+  WEEKS          予約画面を何週分読むか（デフォルト 2）
+  DAYS_AHEAD     今日から何日先までの空きを通知するか（デフォルト 7）
   WEEKDAYS       通知する曜日。例 "土,日"（空なら全曜日）
   PERIODS        通知する時限。例 "1-4,8"（空なら全時限）
   STATE_FILE     前回の結果を保存するファイル（デフォルト state.json）
@@ -31,7 +32,8 @@ STUDENT_NO = os.environ["STUDENT_NO"]
 PASSWORD = os.environ["PASSWORD"]
 NTFY_TOPIC = os.environ["NTFY_TOPIC"]
 
-WEEKS = int(os.environ.get("WEEKS") or 3)
+WEEKS = int(os.environ.get("WEEKS") or 2)
+DAYS_AHEAD = int(os.environ.get("DAYS_AHEAD") or 7)
 WEEKDAYS = [w.strip() for w in (os.environ.get("WEEKDAYS") or "").split(",") if w.strip()]
 PERIODS_RAW = os.environ.get("PERIODS") or ""
 STATE_FILE = os.environ.get("STATE_FILE") or "state.json"
@@ -215,7 +217,8 @@ def check_once():
 
     now = datetime.now(JST)
     today = now.strftime("%Y/%m/%d")
-    hits = [s for s in slots if wanted(s) and s["date"] >= today]
+    last_day = (now + timedelta(days=DAYS_AHEAD)).strftime("%Y/%m/%d")
+    hits = [s for s in slots if wanted(s) and today <= s["date"] <= last_day]
     keys = {slot_key(s) for s in hits}
     prev = set(state.get("slots", []))
     new = [s for s in hits if slot_key(s) not in prev]
