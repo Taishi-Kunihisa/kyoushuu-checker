@@ -1,19 +1,25 @@
 name: 教習所の空き確認
 
+# GitHub の定期実行（schedule）は大きく遅れたり間引かれたりするので、
+# 1回の実行の中で10分おきに確認を繰り返し（約5時間半）、終わったら自分自身を再実行してつなぐ。
+# schedule はループが何かで途切れたときの再起動用。
 on:
   schedule:
-    # UTCで指定。日本時間 6:03〜23:53 の10分おき（GitHub側の混雑で数分〜十数分遅れることあり）
-    - cron: "3,13,23,33,43,53 21-23,0-14 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 concurrency:
   group: kyoushuu-check
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  actions: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +40,7 @@ jobs:
           key: slots-state-${{ github.run_id }}
           restore-keys: slots-state-
 
-      - name: 空き確認
+      - name: 空き確認（10分おき・約5時間半）
         env:
           FAVORITE_URL: ${{ secrets.FAVORITE_URL }}
           STUDENT_NO: ${{ secrets.STUDENT_NO }}
@@ -43,11 +49,21 @@ jobs:
           WEEKS: ${{ vars.WEEKS }}
           WEEKDAYS: ${{ vars.WEEKDAYS }}
           PERIODS: ${{ vars.PERIODS }}
+          LOOP_MINUTES: "330"
+          INTERVAL_MINUTES: "10"
+          ACTIVE_FROM: "6"
+          ACTIVE_TO: "24"
         run: python check_slots.py
 
       - name: 結果を保存
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/cache/save@v4
         with:
           path: state.json
           key: slots-state-${{ github.run_id }}
+
+      - name: 次のループを起動
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run check.yml --repo "${{ github.repository }}" --ref "${{ github.ref_name }}"
