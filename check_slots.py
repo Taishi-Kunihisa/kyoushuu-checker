@@ -35,6 +35,10 @@ WEEKS = int(os.environ.get("WEEKS") or 3)
 WEEKDAYS = [w.strip() for w in (os.environ.get("WEEKDAYS") or "").split(",") if w.strip()]
 PERIODS_RAW = os.environ.get("PERIODS") or ""
 STATE_FILE = os.environ.get("STATE_FILE") or "state.json"
+LOOP_MINUTES = int(os.environ.get("LOOP_MINUTES") or 0)
+INTERVAL_MINUTES = int(os.environ.get("INTERVAL_MINUTES") or 10)
+ACTIVE_FROM = int(os.environ.get("ACTIVE_FROM") or 6)   # 日本時間でこの時から
+ACTIVE_TO = int(os.environ.get("ACTIVE_TO") or 24)      # この時の手前まで確認する
 
 DAY_RE = re.compile(r"^(\d{4}/\d{2}/\d{2})\s*\((.)\)\s*(空|×)")
 SLOT_RE = re.compile(r"^(\d{1,2})時限\s*(\d{1,2}:\d{2})\s*～\s*(\d{1,2}:\d{2})")
@@ -191,13 +195,14 @@ def save_state(state):
         json.dump(state, f, ensure_ascii=False, indent=2)
 
 
-def main():
+def check_once():
+    """1回分の確認。成功なら True。"""
     state = load_state()
     try:
         target, slots = scrape()
     except Exception as e:
         # 詳細はログに出さず通知でだけ送る（画面の文言に個人情報が含まれることがあるため）
-        print(f"エラー: {type(e).__name__}", file=sys.stderr)
+        print(f"[{datetime.now(JST):%Y-%m-%d %H:%M}] エラー: {type(e).__name__}", file=sys.stderr)
         # 連続エラーで通知が鳴り続けないよう、エラー状態に入ったときだけ通知
         if not state.get("error"):
             try:
@@ -206,7 +211,7 @@ def main():
                 pass
         state["error"] = True
         save_state(state)
-        sys.exit(1)
+        return False
 
     now = datetime.now(JST)
     today = now.strftime("%Y/%m/%d")
@@ -226,6 +231,33 @@ def main():
         print("エラーから復帰しました")
 
     save_state({"slots": sorted(keys), "error": False, "checked_at": now.isoformat()})
+    return True
+
+
+def in_active_hours(now):
+    return ACTIVE_FROM <= now.hour < ACTIVE_TO
+
+
+def main():
+    """
+    LOOP_MINUTES が 0 なら1回だけ確認して終了。
+    それ以外は INTERVAL_MINUTES ごとに確認を繰り返し、LOOP_MINUTES 経ったら終了する
+    （終了後にワークフローが自分自身を再実行してループを繋ぐ）。
+    """
+    if LOOP_MINUTES <= 0:
+        sys.exit(0 if check_once() else 1)
+
+    deadline = time.time() + LOOP_MINUTES * 60
+    while True:
+        started = time.time()
+        now = datetime.now(JST)
+        if in_active_hours(now):
+            check_once()
+        next_at = started + INTERVAL_MINUTES * 60
+        if next_at >= deadline:
+            break
+        time.sleep(max(0, next_at - time.time()))
+    print("ループ終了")
 
 
 if __name__ == "__main__":
